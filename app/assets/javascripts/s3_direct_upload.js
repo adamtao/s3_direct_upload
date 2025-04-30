@@ -6,7 +6,7 @@
   $ = jQuery;
 
   $.fn.S3Uploader = function(options) {
-    var $uploadForm, build_content_object, build_relativePath, current_files, forms_for_submit, has_relativePath, setUploadForm, settings;
+    var $uploadForm, build_content_object, build_relativePath, cleaned_filename, current_files, forms_for_submit, has_relativePath, setUploadForm, settings;
     if (this.length > 1) {
       this.each(function() {
         return $(this).S3Uploader(options);
@@ -83,16 +83,28 @@
               url: callback_url,
               data: content,
               beforeSend: function(xhr, settings) {
-                return $uploadForm.trigger('ajax:beforeSend', [xhr, settings]);
+                var event;
+                event = $.Event('ajax:beforeSend');
+                $uploadForm.trigger(event, [xhr, settings]);
+                return event.result;
               },
               complete: function(xhr, status) {
-                return $uploadForm.trigger('ajax:complete', [xhr, status]);
+                var event;
+                event = $.Event('ajax:complete');
+                $uploadForm.trigger(event, [xhr, status]);
+                return event.result;
               },
               success: function(data, status, xhr) {
-                return $uploadForm.trigger('ajax:success', [data, status, xhr]);
+                var event;
+                event = $.Event('ajax:success');
+                $uploadForm.trigger(event, [data, status, xhr]);
+                return event.result;
               },
               error: function(xhr, status, error) {
-                return $uploadForm.trigger('ajax:error', [xhr, status, error]);
+                var event;
+                event = $.Event('ajax:error');
+                $uploadForm.trigger(event, [xhr, status, error]);
+                return event.result;
               }
             });
           }
@@ -125,7 +137,7 @@
             name: "content-type",
             value: fileType
           });
-          key = $uploadForm.data("key").replace('{timestamp}', new Date().getTime()).replace('{unique_id}', this.files[0].unique_id).replace('{extension}', this.files[0].name.split('.').pop());
+          key = $uploadForm.data("key").replace('{timestamp}', new Date().getTime()).replace('{unique_id}', this.files[0].unique_id).replace('{cleaned_filename}', cleaned_filename(this.files[0].name)).replace('{extension}', this.files[0].name.split('.').pop());
           key_field = $.grep(data, function(n) {
             if (n.name === "key") {
               return n;
@@ -142,15 +154,17 @@
       });
     };
     build_content_object = function($uploadForm, file, result) {
-      var content, domain;
+      var content, domain, key;
       content = {};
       if (result) {
         content.url = $(result).find("Location").text();
         content.filepath = $('<a />').attr('href', content.url)[0].pathname;
       } else {
         domain = $uploadForm.attr('action');
-        content.filepath = $uploadForm.find('input[name=key]').val().replace('/${filename}', '');
-        content.url = domain + content.filepath + '/' + encodeURIComponent(file.name);
+        key = $uploadForm.find('input[name=key]').val();
+        content.filepath = key.replace('/{filename}', '').replace('/{cleaned_filename}', '');
+        content.url = domain + key.replace('/{filename}', encodeURIComponent(file.name));
+        content.url = content.url.replace('/{cleaned_filename}', cleaned_filename(file.name));
       }
       content.filename = file.name;
       if ('size' in file) {
@@ -172,6 +186,9 @@
         content = $.extend(content, settings.additional_data);
       }
       return content;
+    };
+    cleaned_filename = function(filename) {
+      return filename.replace(/\s/g, '_').replace(/[^\w.-]/gi, '');
     };
     has_relativePath = function(file) {
       return file.relativePath || file.webkitRelativePath;
